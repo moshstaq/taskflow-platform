@@ -1,0 +1,16 @@
+name: processor-service
+
+on:
+    push:
+        branches: [ main ]
+        paths:
+            - "services/processor-service/**"
+            - "charts/processor-service/**"
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        uses: ./.github/workflows/service-deploy.yml
+        with:
+            service_name: processor-service
+        secrets: inherit

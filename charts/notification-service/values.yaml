@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+workloadIdentity:
+  clientId: "" # TODO: set from terraform output -raw mi_notification_service_client_id
+
+serviceAccount:
+  name: notification-service
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector:
+  nodepool-type: workload
+
+podDisruptionBudget:
+  minAvailable: 1

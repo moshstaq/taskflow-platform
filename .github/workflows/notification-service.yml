@@ -1,0 +1,16 @@
+name: notification-service
+
+on:
+    push:
+        branches: [ main ]
+        paths:
+            - "services/notification-service/**"
+            - "charts/notification-service/**"
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        uses: ./.github/workflows/service-deploy.yml
+        with:
+            service_name: notification-service
+        secrets: inherit

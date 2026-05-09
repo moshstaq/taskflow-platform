@@ -1,0 +1,16 @@
+name: api-service
+
+on:
+    push:
+        branches: [ main ]
+        paths:
+            - "services/api-service/**"
+            - "charts/api-service/**"
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        uses: ./.github/workflows/service-deploy.yml
+        with:
+            service_name: api-service
+        secrets: inherit

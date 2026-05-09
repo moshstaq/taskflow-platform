@@ -1,0 +1,110 @@
+name: Infrastructure Drift Detection
+
+on:
+    schedule:
+        - cron: "0 6 * * 1"
+    workflow_dispatch:
+
+permissions:
+    id-token: write
+    contents: read
+    issues: write
+
+env:
+    ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    ARM_USE_OIDC: true
+    ARM_USE_AZUREAD: true
+
+jobs:
+    drift-check:
+        name: Drift Check - ${{ matrix.name }}
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - name: foundation
+                      path: terraform/foundation
+                    - name: compute
+                      path: terraform/compute
+                    - name: bindings
+                      path: terraform/bindings
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.5.7
+
+            - name: Init
+              working-directory: ${{ matrix.path }}
+              run: terraform init
+
+            - name: Plan (drift check)
+              id: plan
+              working-directory: ${{ matrix.path }}
+              run: |
+                  set +e
+                  terraform plan -detailed-exitcode -no-color -out=tfplan 2>&1 | tee plan_output.txt
+                  EXIT_CODE=$?
+                  echo "exitcode=$EXIT_CODE" >> $GITHUB_OUTPUT
+                  exit 0
+
+            - name: No drift
+              if: steps.plan.outputs.exitcode == '0'
+              run: echo "✅ No drift in ${{ matrix.name }}"
+
+            - name: Open or update issue on drift
+              if: steps.plan.outputs.exitcode == '2'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const planOutput = fs.readFileSync('${{ matrix.path }}/plan_output.txt', 'utf8');
+
+                      const existingIssues = await github.rest.issues.listForRepo({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        state: 'open',
+                        labels: 'drift'
+                      });
+
+                      const existing = existingIssues.data.find(
+                        i => i.title.includes('${{ matrix.name }}')
+                      );
+
+                      if (existing) {
+                        await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: existing.number,
+                          body: `## Drift still present\n\n**Detected:** ${new Date().toISOString()}\n\n\`\`\`\n${planOutput.slice(0, 60000)}\n\`\`\``
+                        });
+                      } else {
+                        await github.rest.issues.create({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          title: '⚠️ Drift Detected: ${{ matrix.name }}',
+                          body: `## Infrastructure Drift — taskflow-platform\n\n**Module:** \`${{ matrix.path }}\`\n**Detected:** ${new Date().toISOString()}\n\n### Plan output\n\`\`\`\n${planOutput.slice(0, 60000)}\n\`\`\`\n\n### Resolution options\n1. **Accept drift** — update Terraform to match current state\n2. **Correct drift** — run \`terraform apply\` to restore desired state\n3. **Investigate** — identify what made the change and why`,
+                          labels: ['drift', 'infrastructure']
+                        });
+                      }
+
+            - name: Fail on plan error
+              if: steps.plan.outputs.exitcode == '1'
+              run: |
+                  echo "❌ Plan failed for ${{ matrix.name }}"
+                  cat ${{ matrix.path }}/plan_output.txt
+                  exit 1

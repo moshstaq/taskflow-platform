@@ -1,0 +1,39 @@
+# .gitignore
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
+# Secrets
+*.pem
+*.key
+*secret*
+*password*
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo   
+
+# Logs
+*.log 
+
+#Screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif*.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+*.bak

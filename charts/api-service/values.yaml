@@ -1,0 +1,44 @@
+replicaCount: 2
+
+image:
+  repository: "" # populated by pipeline: <acr_login_server>/api-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Workload identity — populated from Terraform output mi_api_service_client_id
+# after foundation tier is first applied.
+workloadIdentity:
+  clientId: "" # TODO: set from terraform output -raw mi_api_service_client_id
+
+serviceAccount:
+  name: api-service
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  host: "" # TODO: set to your ingress hostname or IP
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector:
+  nodepool-type: workload
+
+podDisruptionBudget:
+  minAvailable: 1

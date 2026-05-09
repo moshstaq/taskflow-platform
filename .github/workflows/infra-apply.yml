@@ -1,0 +1,116 @@
+name: Infrastructure Apply
+
+on:
+    push:
+        branches: [ main ]
+        paths:
+            - "terraform/**"
+
+permissions:
+    id-token: write
+    contents: read
+
+env:
+    ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    ARM_USE_OIDC: true
+    ARM_USE_AZUREAD: true
+
+jobs:
+    # All three tiers always apply in sequence regardless of which files changed.
+    #
+    # Why not change-detection like the platform repo?
+    # The tiers are tightly coupled via remote state. A compute change produces
+    # a new oidc_issuer_url output. If bindings was skipped, its federated
+    # credentials would hold a stale issuer URL and workload identity would break.
+    #
+    # The cost of always applying is one extra plan+apply per unchanged tier.
+    # For tiers with no changes, apply completes in ~10 seconds (no-op).
+    # This is an acceptable trade-off for correctness.
+
+    apply-foundation:
+        name: Apply — foundation (tier 1)
+        runs-on: ubuntu-latest
+        environment: azure-production
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.5.7
+
+            - name: Init
+              working-directory: terraform/foundation
+              run: terraform init
+
+            - name: Apply
+              working-directory: terraform/foundation
+              run: terraform apply -auto-approve -input=false
+
+    apply-compute:
+        name: Apply — compute (tier 2)
+        needs: apply-foundation
+        runs-on: ubuntu-latest
+        environment: azure-production
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.5.7
+
+            - name: Init
+              working-directory: terraform/compute
+              run: terraform init
+
+            - name: Apply
+              working-directory: terraform/compute
+              run: terraform apply -auto-approve -input=false
+
+    apply-bindings:
+        name: Apply — bindings (tier 3)
+        needs: apply-compute
+        runs-on: ubuntu-latest
+        environment: azure-production
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.5.7
+
+            - name: Init
+              working-directory: terraform/bindings
+              run: terraform init
+
+            - name: Apply
+              working-directory: terraform/bindings
+              run: terraform apply -auto-approve -input=false

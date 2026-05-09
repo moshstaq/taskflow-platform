@@ -1,0 +1,170 @@
+name: Infrastructure Plan
+
+on:
+    pull_request:
+        branches: [ main ]
+        paths:
+            - "terraform/**"
+            - ".github/workflows/infra-plan.yml"
+
+permissions:
+    id-token: write
+    contents: read
+    pull-requests: write
+
+env:
+    ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    ARM_USE_OIDC: true
+    ARM_USE_AZUREAD: true
+
+jobs:
+    plan:
+        name: Plan - ${{ matrix.name }}
+        runs-on: ubuntu-latest
+        strategy:
+            # Plans run sequentially so that a tier-1 failure surfaces before
+            # tier-2 is attempted. Tier-2 and tier-3 plans read remote state from
+            # tier-1 — a failed tier-1 would produce misleading tier-2 plan output.
+            max-parallel: 1
+            fail-fast: false
+            matrix:
+                include:
+                    - name: foundation
+                      path: terraform/foundation
+                      tier: 1
+                    - name: compute
+                      path: terraform/compute
+                      tier: 2
+                    - name: bindings
+                      path: terraform/bindings
+                      tier: 3
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.5.7
+
+            - name: Terraform Init
+              working-directory: ${{ matrix.path }}
+              run: terraform init
+
+            - name: Terraform Validate
+              working-directory: ${{ matrix.path }}
+              run: terraform validate
+
+            - name: Terraform Plan
+              id: plan
+              working-directory: ${{ matrix.path }}
+              run: |
+                  terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan_output.txt
+                  echo "exitcode=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+              continue-on-error: true
+
+            - name: Save plan summary
+              working-directory: ${{ matrix.path }}
+              run: |
+                  {
+                    echo "MODULE_NAME=${{ matrix.name }}"
+                    echo "MODULE_PATH=${{ matrix.path }}"
+                    echo "PLAN_EXITCODE=${{ steps.plan.outputs.exitcode }}"
+                    echo "---PLAN_OUTPUT_START---"
+                    cat plan_output.txt
+                    echo "---PLAN_OUTPUT_END---"
+                  } > plan_summary.txt
+
+            - name: Upload plan summary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: plan-${{ matrix.name }}
+                  path: ${{ matrix.path }}/plan_summary.txt
+                  retention-days: 1
+
+    comment:
+        name: Post PR Comment
+        needs: plan
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download all plan artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: plans
+                  pattern: plan-*
+
+            - name: Build comment
+              id: build-comment
+              run: |
+                  COMMENT="## 🏗️ Taskflow Infrastructure Plan\n\n"
+
+                  for dir in plans/plan-foundation plans/plan-compute plans/plan-bindings; do
+                    if [ -d "$dir" ]; then
+                      SUMMARY_FILE="$dir/plan_summary.txt"
+                      MODULE_NAME=$(grep "^MODULE_NAME=" "$SUMMARY_FILE" | cut -d'=' -f2)
+                      MODULE_PATH=$(grep "^MODULE_PATH=" "$SUMMARY_FILE" | cut -d'=' -f2)
+                      EXITCODE=$(grep "^PLAN_EXITCODE=" "$SUMMARY_FILE" | cut -d'=' -f2)
+                      PLAN_OUTPUT=$(sed -n '/---PLAN_OUTPUT_START---/,/---PLAN_OUTPUT_END---/p' "$SUMMARY_FILE" | sed '1d;$d')
+
+                      case "$EXITCODE" in
+                        0) STATUS="✅ No changes" ;;
+                        2) STATUS="⚠️ Changes pending" ;;
+                        *) STATUS="❌ Plan failed" ;;
+                      esac
+
+                      PLAN_SUMMARY=$(echo "$PLAN_OUTPUT" | grep -E "Plan:|No changes" | tail -1)
+                      [ -z "$PLAN_SUMMARY" ] && PLAN_SUMMARY="See details below"
+
+                      COMMENT+="### ${STATUS} — ${MODULE_NAME}\n"
+                      COMMENT+="**Path:** \`${MODULE_PATH}\` | **Summary:** ${PLAN_SUMMARY}\n\n"
+                      COMMENT+="<details>\n<summary>Show plan output</summary>\n\n\`\`\`\n${PLAN_OUTPUT}\n\`\`\`\n</details>\n\n---\n\n"
+                    fi
+                  done
+
+                  COMMENT+="*@${{ github.actor }} • \`${{ github.workflow }}\`*"
+                  echo -e "$COMMENT" > comment.md
+
+            - name: Post or update PR comment
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const comment = fs.readFileSync('comment.md', 'utf8');
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+
+                      const existing = comments.find(c =>
+                        c.user.type === 'Bot' &&
+                        c.body.includes('🏗️ Taskflow Infrastructure Plan')
+                      );
+
+                      if (existing) {
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                          body: comment
+                        });
+                      } else {
+                        await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          body: comment
+                        });
+                      }

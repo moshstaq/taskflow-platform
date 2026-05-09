@@ -1,0 +1,8 @@
+# notification-service
+apiVersion: v2
+name: notification-service
+description: Async notification consumer — reads from Service Bus task-events topic
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
