@@ -6,7 +6,7 @@ image:
   pullPolicy: Always
 
 workloadIdentity:
-  clientId: "" # TODO: set from terraform output -raw mi_processor_service_client_id
+  clientId: "" # TODO:from terraform output -raw mi_processor_service_client_id
 
 serviceAccount:
   name: processor-service

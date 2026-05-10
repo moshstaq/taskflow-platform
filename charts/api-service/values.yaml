@@ -27,7 +27,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-body-size: "1m"
-  host: "" # TODO: set to your ingress hostname or IP
+  host: "" 
   tls: []
 
 resources:
