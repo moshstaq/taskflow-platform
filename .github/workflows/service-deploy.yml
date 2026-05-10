@@ -1,126 +1,132 @@
 name: Service Deploy (reusable)
 
 on:
-    workflow_call:
-        inputs:
-            service_name:
-                description: "Service name matching services/<name> and charts/<name>"
-                type: string
-                required: true
-            image_tag:
-                description: "Image tag to build and deploy (defaults to git SHA)"
-                type: string
-                required: false
-                default: ""
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Service name matching services/<name> and charts/<name>"
+        type: string
+        required: true
+      image_tag:
+        description: "Image tag to build and deploy (defaults to git SHA)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
-    id-token: write
-    contents: read
+  id-token: write
+  contents: read
 
 env:
-    ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-    ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-    ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
-    deploy:
-        name: Build → Scan → Push → Deploy
-        runs-on: ubuntu-latest
-        environment: azure-production
+  deploy:
+    name: Build → Scan → Push → Deploy
+    runs-on: ubuntu-latest
+    environment: azure-production
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            - name: Set image tag
-              id: tag
-              run: |
-                  TAG="${{ inputs.image_tag }}"
-                  [ -z "$TAG" ] && TAG="${{ github.sha }}"
-                  echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Set image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="${{ github.sha }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-            # ── Azure Login ──────────────────────────────────────────────────────────
-            - name: Azure Login
-              uses: azure/login@v2
-              with:
-                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
-                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # ── Azure Login ──────────────────────────────────────────────────────────
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-            # ── ACR credentials ──────────────────────────────────────────────────────
-            # Retrieves ACR login server from Terraform output in remote state.
-            # No static credentials — ACR name is read at runtime.
-            - name: Get ACR login server
-              id: acr
-              run: |
-                  ACR_NAME=$(az acr list --resource-group rg-taskflow --query "[0].name" -o tsv)
-                  ACR_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
-                  echo "name=$ACR_NAME" >> $GITHUB_OUTPUT
-                  echo "server=$ACR_SERVER" >> $GITHUB_OUTPUT
+      # ── ACR credentials ──────────────────────────────────────────────────────
+      # Retrieves ACR login server from Terraform output in remote state.
+      # No static credentials — ACR name is read at runtime.
+      - name: Get ACR login server
+        id: acr
+        run: |
+          ACR_NAME=$(az acr list --resource-group rg-taskflow --query "[0].name" -o tsv)
+          ACR_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+          echo "name=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "server=$ACR_SERVER" >> $GITHUB_OUTPUT
 
-            # ── Build ────────────────────────────────────────────────────────────────
-            - name: Build image
-              run: |
-                  docker build \
-                    -t ${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{ steps.tag.outputs.tag }} \
-                    -f services/${{ inputs.service_name }}/Dockerfile \
-                    services/${{ inputs.service_name }}
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build image
+        run: |
+          docker build \
+            -t ${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{ steps.tag.outputs.tag }} \
+            -f services/${{ inputs.service_name }}/Dockerfile \
+            services/${{ inputs.service_name }}
 
-            # ── Scan ─────────────────────────────────────────────────────────────────
-            # Trivy scans the built image. HIGH and CRITICAL vulnerabilities fail the pipeline.
-            # Fix: update the base image or patch the vulnerable package.
-            - name: Scan image with Trivy
-              uses: aquasecurity/trivy-action@master
-              with:
-                  image-ref: "${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{
-                      steps.tag.outputs.tag }}"
-                  format: "table"
-                  exit-code: "1"
-                  severity: "HIGH,CRITICAL"
-                  ignore-unfixed: true
+      # ── Scan ─────────────────────────────────────────────────────────────────
+      # Trivy scans the built image. HIGH and CRITICAL vulnerabilities fail the pipeline.
+      # Fix: update the base image or patch the vulnerable package.
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{
+            steps.tag.outputs.tag }}"
+          format: "table"
+          exit-code: "1"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
 
-            # ── Push ─────────────────────────────────────────────────────────────────
-            - name: Push to ACR
-              run: |
-                  az acr login --name ${{ steps.acr.outputs.name }}
-                  docker push ${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{ steps.tag.outputs.tag }}
+      # ── Push ─────────────────────────────────────────────────────────────────
+      - name: Push to ACR
+        run: |
+          az acr login --name ${{ steps.acr.outputs.name }}
+          docker push ${{ steps.acr.outputs.server }}/${{ inputs.service_name }}:${{ steps.tag.outputs.tag }}
 
-            # ── Deploy ───────────────────────────────────────────────────────────────
-            # az aks command invoke runs helm inside a temporary pod on the cluster.
-            # The --file flag uploads the local chart directory into that pod's context.
-            # This avoids the need for the runner to have direct API server access.
-            #
-            # The runner authenticates to Azure via OIDC (environment:azure-production
-            # subject claim) and then invokes kubectl/helm through the Azure API.
-            - name: Get AKS cluster name
-              id: aks
-              run: |
-                  AKS_NAME=$(az aks list --resource-group rg-taskflow --query "[0].name" -o tsv)
-                  echo "name=$AKS_NAME" >> $GITHUB_OUTPUT
+      - name: Package Helm chart
+        run: |
+          helm package charts/${{ inputs.service_name }} --destination /tmp/chart
 
-            - name: Get workload identity client ID
-              id: workload-identity
-              run: |
-                  CLIENT_ID=$(az identity show \
-                    --resource-group rg-taskflow \
-                    --name mi-taskflow-${{ inputs.service_name }} \
-                    --query clientId \
-                    --output tsv)
-                  echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+      # ── Deploy ───────────────────────────────────────────────────────────────
+      # az aks command invoke runs helm inside a temporary pod on the cluster.
+      # The --file flag uploads the local chart directory into that pod's context.
+      # This avoids the need for the runner to have direct API server access.
+      #
+      # The runner authenticates to Azure via OIDC (environment:azure-production
+      # subject claim) and then invokes kubectl/helm through the Azure API.
+      - name: Get AKS cluster name
+        id: aks
+        run: |
+          AKS_NAME=$(az aks list --resource-group rg-taskflow --query "[0].name" -o tsv)
+          echo "name=$AKS_NAME" >> $GITHUB_OUTPUT
 
-            - name: Deploy via az aks command invoke
-              run: |
-                  az aks command invoke \
-                    --resource-group rg-taskflow \
-                    --name ${{ steps.aks.outputs.name }} \
-                    --command "
-                      helm upgrade --install ${{ inputs.service_name }} /tmp/chart \
-                        --namespace taskflow \
-                        --create-namespace \
-                        --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
-                        --set image.tag=${{ steps.tag.outputs.tag }} \
-                        --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
-                        --wait \
-                        --timeout 5m
-                    " \
-                    --file charts/${{ inputs.service_name }}
+      - name: Get workload identity client ID
+        id: workload-identity
+        run: |
+          CLIENT_ID=$(az identity show \
+            --resource-group rg-taskflow \
+            --name mi-taskflow-${{ inputs.service_name }} \
+            --query clientId \
+            --output tsv)
+          echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+
+      - name: Deploy via az aks command invoke
+        run: |
+          CHART_TGZ=$(ls /tmp/${{ inputs.service_name }}-*.tgz)
+
+          az aks command invoke \
+            --resource-group rg-taskflow \
+            --name ${{ steps.aks.outputs.name }} \
+            --command "
+              helm upgrade --install ${{ inputs.service_name }} /tmp/$(basename $CHART_TGZ) \
+                --namespace taskflow \
+                --create-namespace \
+                --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
+                --set image.tag=${{ steps.tag.outputs.tag }} \
+                --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
+                --wait \
+                --timeout 5m
+            " \
+            --file $CHART_TGZ
