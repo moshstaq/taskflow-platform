@@ -56,6 +56,9 @@ locals {
   mi_processor_service_id           = data.terraform_remote_state.foundation.outputs.mi_processor_service_id
   mi_notification_service_id        = data.terraform_remote_state.foundation.outputs.mi_notification_service_id
   service_bus_namespace_id          = data.terraform_remote_state.foundation.outputs.service_bus_namespace_id
+  key_vault_name                    = data.terraform_remote_state.foundation.outputs.key_vault_name
+  private_dns_zone_kv_rg            = data.terraform_remote_state.connectivity.outputs.private_dns_zone_kv_rg
+
 
   common_tags = {
     environment = var.environment
@@ -91,24 +94,30 @@ resource "azurerm_role_assignment" "acr_pull" {
 #   5. Pod uses that token to authenticate to Key Vault / Service Bus.
 
 resource "azurerm_federated_identity_credential" "api_service" {
-  name     = "fed-taskflow-api-service"
-  audience = ["api://AzureADTokenExchange"]
-  issuer   = local.oidc_issuer_url
-  subject  = "system:serviceaccount:taskflow:api-service"
+  name                = "fed-taskflow-api-service"
+  resource_group_name = local.rg_name
+  parent_id           = local.mi_api_service_id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = local.oidc_issuer_url
+  subject             = "system:serviceaccount:taskflow:api-service"
 }
 
 resource "azurerm_federated_identity_credential" "processor_service" {
-  name     = "fed-taskflow-processor-service"
-  audience = ["api://AzureADTokenExchange"]
-  issuer   = local.oidc_issuer_url
-  subject  = "system:serviceaccount:taskflow:processor-service"
+  name                = "fed-taskflow-processor-service"
+  resource_group_name = local.rg_name
+  parent_id           = local.mi_processor_service_id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = local.oidc_issuer_url
+  subject             = "system:serviceaccount:taskflow:processor-service"
 }
 
 resource "azurerm_federated_identity_credential" "notification_service" {
-  name     = "fed-taskflow-notification-service"
-  audience = ["api://AzureADTokenExchange"]
-  issuer   = local.oidc_issuer_url
-  subject  = "system:serviceaccount:taskflow:notification-service"
+  name                = "fed-taskflow-notification-service"
+  resource_group_name = local.rg_name
+  parent_id           = local.mi_notification_service_id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = local.oidc_issuer_url
+  subject             = "system:serviceaccount:taskflow:notification-service"
 }
 
 
@@ -203,22 +212,13 @@ resource "azurerm_private_endpoint" "kv" {
 # services will receive a connection timeout — not a 403. The PE is functional;
 # the DNS is the missing link.
 #
-# resource "azurerm_private_dns_a_record" "kv" {
-#   name                = local.key_vault_name
-#   zone_name           = "privatelink.vaultcore.azure.net"
-#   resource_group_name = "<platform-dns-rg>"
-#   ttl                 = 300
-#   records             = [azurerm_private_endpoint.kv.private_service_connection[0].private_ip_address]
-# }
+resource "azurerm_private_dns_a_record" "kv" {
+  name                = local.key_vault_name
+  zone_name           = "privatelink.vaultcore.azure.net"
+  resource_group_name = local.private_dns_zone_kv_rg
+  ttl                 = 300
+  records             = [azurerm_private_endpoint.kv.private_service_connection[0].private_ip_address]
+}
 # -----------------------------------------------------------------------------
 
-# ── Private DNS A Record (on-demand) ─────────────────────────────────────────
-# Add this block when platform/connectivity provisions the DNS zone.
-# Until then, leave commented.
-#
-# TODO: implement azurerm_private_dns_a_record.key_vault (when DNS zone exists)
-#   name                = "kv-taskflow"
-#   zone_name           = "privatelink.vaultcore.azure.net"
-#   resource_group_name = <platform connectivity RG>
-#   ttl                 = 300
-#   records             = [azurerm_private_endpoint.key_vault.private_service_connection[0].private_ip_address]
+

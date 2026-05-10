@@ -3,15 +3,17 @@ replicaCount: 2
 image:
   repository: "" # populated by pipeline: <acr_login_server>/api-service
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # Workload identity — populated from Terraform output mi_api_service_client_id
 # after foundation tier is first applied.
 workloadIdentity:
-  clientId: "" # TODO: set from terraform output -raw mi_api_service_client_id
+  clientId: "d7e6d91d-bdae-48f2-9633-7d97a5504123" # TODO: set from terraform output -raw mi_api_service_client_id
 
 serviceAccount:
   name: api-service
+
+processorUrl: "http://processor-service:8080"
 
 service:
   type: ClusterIP
@@ -21,6 +23,10 @@ service:
 ingress:
   enabled: true
   className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
   host: "" # TODO: set to your ingress hostname or IP
   tls: []
 

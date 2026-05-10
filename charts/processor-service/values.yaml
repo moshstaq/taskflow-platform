@@ -3,10 +3,10 @@ replicaCount: 2
 image:
   repository: ""
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 workloadIdentity:
-  clientId: "" # TODO: set from terraform output -raw mi_processor_service_client_id
+  clientId: "4ed244e9-2aa9-46bc-bb1c-7f5c9949a2d1" # TODO: set from terraform output -raw mi_processor_service_client_id
 
 serviceAccount:
   name: processor-service
@@ -34,3 +34,4 @@ nodeSelector:
 
 podDisruptionBudget:
   minAvailable: 1
+

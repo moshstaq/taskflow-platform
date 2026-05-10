@@ -81,7 +81,7 @@ resource "azurerm_servicebus_topic" "task_events" {
   name         = "task-events"
   namespace_id = azurerm_servicebus_namespace.sb.id
 
-  partitioning_enabled  = true
+  enable_partitioning   = true
   default_message_ttl   = "PT1H"
   max_size_in_megabytes = 1024
 }
@@ -109,14 +109,14 @@ resource "azurerm_key_vault" "kv" {
   tenant_id           = data.azurerm_client_config.current.tenant_id
   sku_name            = "standard"
 
-  rbac_authorization_enabled    = true
+  enable_rbac_authorization     = true
   purge_protection_enabled      = true
   soft_delete_retention_days    = 90
   public_network_access_enabled = false
 
   network_acls {
     default_action = "Deny"
-    bypass         = ["AzureServices"]
+    bypass         = "AzureServices"
   }
 
   tags = local.common_tags
@@ -168,8 +168,9 @@ resource "azurerm_monitor_diagnostic_setting" "acr" {
     category = "ContainerRegistryLoginEvents"
   }
 
-  enabled_metric {
+  metric {
     category = "AllMetrics"
+    enabled  = true
 
   }
 }
@@ -187,8 +188,9 @@ resource "azurerm_monitor_diagnostic_setting" "sb" {
     category = "RuntimeAuditLogs"
   }
 
-  enabled_metric {
+  metric {
     category = "AllMetrics"
+    enabled  = true
 
   }
 }
@@ -202,8 +204,9 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
     category = "AuditEvent"
   }
 
-  enabled_metric {
+  metric {
     category = "AllMetrics"
+    enabled  = true
 
   }
 }

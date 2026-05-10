@@ -195,9 +195,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "workload" {
   os_disk_size_gb       = 30
   mode                  = "User"
 
-  auto_scaling_enabled = true
-  min_count            = 1
-  max_count            = 3
+  enable_auto_scaling = true
+  min_count           = 1
+  max_count           = 3
 
   node_labels = {
     "nodepool-type" = "workload"
