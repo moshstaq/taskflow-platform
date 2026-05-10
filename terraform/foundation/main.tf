@@ -41,102 +41,169 @@ locals {
   }
 }
 
+data "azurerm_client_config" "current" {}
+
+resource "random_string" "suffix" {
+  length  = 4
+  upper   = false
+  special = false
+}
+
 # ── ACR ───────────────────────────────────────────────────────────────────────
 # Container registry for all taskflow service images.
-#
-# Design decisions:
-# - admin_enabled: false — images are pulled via AcrPull role assignment on
-#   the AKS kubelet identity. No username/password ever used.
-# - public_network_access_enabled: true — Basic SKU does not support private
-#   endpoints. Images are pushed from GitHub Actions runners (public) and
-#   pulled by AKS nodes (also public egress via NAT Gateway).
-#
-# TODO: implement azurerm_container_registry.taskflow
-#   name                          = "crtaskflow<random_suffix>"
-#   resource_group_name           = local.rg_name
-#   location                      = var.location
-#   sku                           = var.acr_sku
-#   admin_enabled                 = false
-#   tags                          = local.common_tags
+
+resource "azurerm_container_registry" "acr" {
+  name                = "crtaskflow${random_string.suffix.result}"
+  resource_group_name = local.rg_name
+  location            = var.location
+  sku                 = "Standard"
+  admin_enabled       = false
+
+  tags = local.common_tags
+}
 
 
 # ── Service Bus ───────────────────────────────────────────────────────────────
 # Async messaging between processor-service and notification-service.
 # Topic/subscription model: processor publishes, notification-service consumes.
-#
-# Design decisions:
-# - local_auth_enabled: false — forces workload identity authentication.
-#   No connection strings are used anywhere. Role assignments are in the
-#   bindings tier after managed identities exist.
-# - Standard SKU required — Basic SKU does not support topics.
-#
-# TODO: implement azurerm_servicebus_namespace.taskflow
-#   name                  = "sb-taskflow-<random_suffix>"
-#   resource_group_name   = local.rg_name
-#   location              = var.location
-#   sku                   = var.service_bus_sku
-#   local_auth_enabled    = false
-#   tags                  = local.common_tags
 
-# TODO: implement azurerm_servicebus_topic.task_events
-#   name         = "task-events"
-#   namespace_id = azurerm_servicebus_namespace.taskflow.id
+resource "azurerm_servicebus_namespace" "sb" {
+  name                = "sb-taskflow-${random_string.suffix.result}"
+  resource_group_name = local.rg_name
+  location            = var.location
+  sku                 = "Standard"
+  local_auth_enabled  = false
+
+  tags = local.common_tags
+}
+
+resource "azurerm_servicebus_topic" "task_events" {
+  name         = "task-events"
+  namespace_id = azurerm_servicebus_namespace.sb.id
+
+  partitioning_enabled  = true
+  default_message_ttl   = "PT1H"
+  max_size_in_megabytes = 1024
+}
 
 # TODO: implement azurerm_servicebus_subscription.notification_service
-#   name                = "notification-service"
-#   topic_id            = azurerm_servicebus_topic.task_events.id
-#   max_delivery_count  = 10
+resource "azurerm_servicebus_subscription" "notification" {
+  name               = "notification-service"
+  topic_id           = azurerm_servicebus_topic.task_events.id
+  max_delivery_count = 5
+
+  lock_duration                        = "PT30S"
+  dead_lettering_on_message_expiration = true
+  default_message_ttl                  = "PT1H"
+}
 
 
 # ── Key Vault ─────────────────────────────────────────────────────────────────
 # Central secret store for all taskflow services.
 #
-# Design decisions:
-# - enable_rbac_authorization: true — no legacy access policies.
-#   Secrets access is granted via role assignments in the bindings tier.
-# - public_network_access_enabled: false — accessed via private endpoint only.
-#   Private endpoint is provisioned in the bindings tier into snet-compute.
-# - purge_protection_enabled: true — prevents accidental permanent deletion.
-# - soft_delete_retention_days: 7 — minimum retention, sufficient for a lab.
 #
-# TODO: implement azurerm_key_vault.taskflow
-#   name                          = "kv-taskflow-<random_suffix>"
-#   resource_group_name           = local.rg_name
-#   location                      = var.location
-#   tenant_id                     = data.azurerm_client_config.current.tenant_id
-#   sku_name                      = "standard"
-#   enable_rbac_authorization     = true
-#   public_network_access_enabled = false
-#   purge_protection_enabled      = true
-#   soft_delete_retention_days    = 7
-#   tags                          = local.common_tags
+resource "azurerm_key_vault" "kv" {
+  name                = "kv-taskflow-${random_string.suffix.result}"
+  resource_group_name = local.rg_name
+  location            = var.location
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+
+  rbac_authorization_enabled    = true
+  purge_protection_enabled      = true
+  soft_delete_retention_days    = 90
+  public_network_access_enabled = false
+
+  network_acls {
+    default_action = "Deny"
+    bypass         = ["AzureServices"]
+  }
+
+  tags = local.common_tags
+}
 
 
 # ── Managed Identities ────────────────────────────────────────────────────────
 # One User Assigned Managed Identity per service that requires Azure resource
 # access (Key Vault, Service Bus).
 #
-# Why created here (Tier 1) and not in the bindings tier:
-# - AKS must reference the identities at cluster creation time so the
-#   workload identity webhook can project tokens for them.
-# - Federated credentials (which need the AKS OIDC issuer URL) are added
-#   in the bindings tier after AKS exists. The identity itself is decoupled
-#   from the federation — it is just a principal until bindings wires it up.
-#
-# TODO: implement azurerm_user_assigned_identity.api_service
-#   name                = "mi-taskflow-api-service"
-#   resource_group_name = local.rg_name
-#   location            = var.location
-#   tags                = local.common_tags
+resource "azurerm_user_assigned_identity" "mi_api_service" {
+  name                = "mi-taskflow-api-service"
+  resource_group_name = local.rg_name
+  location            = var.location
 
-# TODO: implement azurerm_user_assigned_identity.processor_service
-#   name                = "mi-taskflow-processor-service"
-#   resource_group_name = local.rg_name
-#   location            = var.location
-#   tags                = local.common_tags
+  tags = local.common_tags
+}
 
-# TODO: implement azurerm_user_assigned_identity.notification_service
-#   name                = "mi-taskflow-notification-service"
-#   resource_group_name = local.rg_name
-#   location            = var.location
-#   tags                = local.common_tags
+resource "azurerm_user_assigned_identity" "mi_processor_service" {
+  name                = "mi-taskflow-processor-service"
+  resource_group_name = local.rg_name
+  location            = var.location
+
+  tags = local.common_tags
+}
+
+resource "azurerm_user_assigned_identity" "mi_notification_service" {
+  name                = "mi-taskflow-notification-service"
+  resource_group_name = local.rg_name
+  location            = var.location
+
+  tags = local.common_tags
+}
+
+
+#----- Diagnostic Settings ───────────────────────────────────────────────────────
+# Wires diagnostics from ACR, Service Bus, and Key Vault to the Log Analytics
+# workspace provisioned by platform/management. 
+resource "azurerm_monitor_diagnostic_setting" "acr" {
+  name                       = "diag-acr-taskflow"
+  target_resource_id         = azurerm_container_registry.acr.id
+  log_analytics_workspace_id = local.law_id
+
+  enabled_log {
+    category = "ContainerRegistryRepositoryEvents"
+  }
+
+  enabled_log {
+    category = "ContainerRegistryLoginEvents"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "sb" {
+  name                       = "diag-sb-taskflow"
+  target_resource_id         = azurerm_servicebus_namespace.sb.id
+  log_analytics_workspace_id = local.law_id
+
+  enabled_log {
+    category = "OperationalLogs"
+  }
+
+  enabled_log {
+    category = "RuntimeAuditLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "kv" {
+  name                       = "diag-kv-taskflow"
+  target_resource_id         = azurerm_key_vault.kv.id
+  log_analytics_workspace_id = local.law_id
+
+  enabled_log {
+    category = "AuditEvent"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+
+  }
+}
