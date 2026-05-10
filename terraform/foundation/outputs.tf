@@ -1,87 +1,90 @@
-# ── ACR ───────────────────────────────────────────────────────────────────────
-# Consumed by: bindings (AcrPull role assignment)
+# ACR
+output "acr_id" {
+  description = "Resource ID of the Azure Container Registry."
+  value       = azurerm_container_registry.acr.id
+}
 
-# TODO: output "acr_id" {
-#   description = "Resource ID of the container registry"
-#   value       = azurerm_container_registry.taskflow.id
-# }
+output "acr_name" {
+  description = "Name of the Azure Container Registry."
+  value       = azurerm_container_registry.acr.name
+}
 
-# TODO: output "acr_name" {
-#   description = "Name of the container registry"
-#   value       = azurerm_container_registry.taskflow.name
-# }
+output "acr_login_server" {
+  description = "Login server hostname of the Azure Container Registry."
+  value       = azurerm_container_registry.acr.login_server
+}
 
-# TODO: output "acr_login_server" {
-#   description = "Login server URL for the container registry"
-#   value       = azurerm_container_registry.taskflow.login_server
-# }
+# Service Bus
+output "service_bus_namespace_id" {
+  description = "Resource ID of the Service Bus namespace."
+  value       = azurerm_servicebus_namespace.sb.id
+}
 
+output "service_bus_namespace_name" {
+  description = "Name of the Service Bus namespace."
+  value       = azurerm_servicebus_namespace.sb.name
+}
 
-# ── Service Bus ───────────────────────────────────────────────────────────────
-# Consumed by: bindings (Service Bus role assignments)
+# Key Vault
+output "key_vault_id" {
+  description = "Resource ID of the Key Vault."
+  value       = azurerm_key_vault.kv.id
+}
 
-# TODO: output "service_bus_namespace_id" {
-#   description = "Resource ID of the Service Bus namespace"
-#   value       = azurerm_servicebus_namespace.taskflow.id
-# }
+output "key_vault_uri" {
+  description = "URI of the Key Vault. Used by services to construct secret references."
+  value       = azurerm_key_vault.kv.vault_uri
+}
 
-# TODO: output "service_bus_namespace_name" {
-#   description = "Name of the Service Bus namespace"
-#   value       = azurerm_servicebus_namespace.taskflow.name
-# }
+output "key_vault_name" {
+  description = "Name of the Key Vault."
+  value       = azurerm_key_vault.kv.name
+}
 
+# Managed Identity — api-service
+output "mi_api_service_id" {
+  description = "Resource ID of the api-service managed identity."
+  value       = azurerm_user_assigned_identity.mi_api_service.id
+}
 
-# ── Key Vault ─────────────────────────────────────────────────────────────────
-# Consumed by: bindings (private endpoint + role assignments)
+output "mi_api_service_client_id" {
+  description = "Client ID of the api-service managed identity. Annotated onto the Kubernetes ServiceAccount."
+  value       = azurerm_user_assigned_identity.mi_api_service.client_id
+}
 
-# TODO: output "key_vault_id" {
-#   description = "Resource ID of the Key Vault"
-#   value       = azurerm_key_vault.taskflow.id
-# }
+output "mi_api_service_principal_id" {
+  description = "Principal ID of the api-service managed identity. Used as subject for RBAC role assignments."
+  value       = azurerm_user_assigned_identity.mi_api_service.principal_id
+}
 
-# TODO: output "key_vault_uri" {
-#   description = "URI of the Key Vault — used by CSI driver SecretProviderClass"
-#   value       = azurerm_key_vault.taskflow.vault_uri
-# }
+# Managed Identity — processor-service
+output "mi_processor_service_id" {
+  description = "Resource ID of the processor-service managed identity."
+  value       = azurerm_user_assigned_identity.mi_processor_service.id
+}
 
-# TODO: output "key_vault_name" {
-#   description = "Name of the Key Vault"
-#   value       = azurerm_key_vault.taskflow.name
-# }
+output "mi_processor_service_client_id" {
+  description = "Client ID of the processor-service managed identity. Annotated onto the Kubernetes ServiceAccount."
+  value       = azurerm_user_assigned_identity.mi_processor_service.client_id
+}
 
+output "mi_processor_service_principal_id" {
+  description = "Principal ID of the processor-service managed identity. Used as subject for RBAC role assignments."
+  value       = azurerm_user_assigned_identity.mi_processor_service.principal_id
+}
 
-# ── Managed Identities ────────────────────────────────────────────────────────
-# Consumed by: compute (passed to AKS), bindings (federated creds + role assignments)
-# client_id  — used in Kubernetes ServiceAccount annotation
-# id         — used in AKS identity block
-# principal_id — used for role assignments
+# Managed Identity — notification-service
+output "mi_notification_service_id" {
+  description = "Resource ID of the notification-service managed identity."
+  value       = azurerm_user_assigned_identity.mi_notification_service.id
+}
 
-# TODO: output "mi_api_service_id" {
-#   value = azurerm_user_assigned_identity.api_service.id
-# }
-# TODO: output "mi_api_service_client_id" {
-#   value = azurerm_user_assigned_identity.api_service.client_id
-# }
-# TODO: output "mi_api_service_principal_id" {
-#   value = azurerm_user_assigned_identity.api_service.principal_id
-# }
+output "mi_notification_service_client_id" {
+  description = "Client ID of the notification-service managed identity. Annotated onto the Kubernetes ServiceAccount."
+  value       = azurerm_user_assigned_identity.mi_notification_service.client_id
+}
 
-# TODO: output "mi_processor_service_id" {
-#   value = azurerm_user_assigned_identity.processor_service.id
-# }
-# TODO: output "mi_processor_service_client_id" {
-#   value = azurerm_user_assigned_identity.processor_service.client_id
-# }
-# TODO: output "mi_processor_service_principal_id" {
-#   value = azurerm_user_assigned_identity.processor_service.principal_id
-# }
-
-# TODO: output "mi_notification_service_id" {
-#   value = azurerm_user_assigned_identity.notification_service.id
-# }
-# TODO: output "mi_notification_service_client_id" {
-#   value = azurerm_user_assigned_identity.notification_service.client_id
-# }
-# TODO: output "mi_notification_service_principal_id" {
-#   value = azurerm_user_assigned_identity.notification_service.principal_id
-# }
+output "mi_notification_service_principal_id" {
+  description = "Principal ID of the notification-service managed identity. Used as subject for RBAC role assignments."
+  value       = azurerm_user_assigned_identity.mi_notification_service.principal_id
+}
