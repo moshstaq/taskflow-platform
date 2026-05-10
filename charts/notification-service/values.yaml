@@ -6,7 +6,7 @@ image:
   pullPolicy: Always
 
 workloadIdentity:
-  clientId: "0e473a38-0be9-4bab-ad9f-98e02f445d24" # TODO: set from terraform output -raw mi_notification_service_client_id
+  clientId: "" # TODO: set from terraform output -raw mi_notification_service_client_id
 
 serviceAccount:
   name: notification-service

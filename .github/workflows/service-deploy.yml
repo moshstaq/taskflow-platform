@@ -98,6 +98,16 @@ jobs:
                   AKS_NAME=$(az aks list --resource-group rg-taskflow --query "[0].name" -o tsv)
                   echo "name=$AKS_NAME" >> $GITHUB_OUTPUT
 
+            - name: Get workload identity client ID
+              id: workload-identity
+              run: |
+                  CLIENT_ID=$(az identity show \
+                    --resource-group rg-taskflow \
+                    --name mi-taskflow-${{ inputs.service_name }} \
+                    --query clientId \
+                    --output tsv)
+                  echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+
             - name: Deploy via az aks command invoke
               run: |
                   az aks command invoke \
@@ -109,6 +119,7 @@ jobs:
                         --create-namespace \
                         --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
                         --set image.tag=${{ steps.tag.outputs.tag }} \
+                        --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
                         --wait \
                         --timeout 5m
                     " \
