@@ -111,21 +111,21 @@ jobs:
       - name: Deploy via az aks command invoke
         run: |
           CHART_TGZ=$(helm package charts/${{ inputs.service_name }} \
-                  --destination /tmp/ | awk '{print $NF}')
+            --destination /tmp/ | awk '{print $NF}')
 
           echo "Packaged chart: $CHART_TGZ"
 
           az aks command invoke \
-                  --resource-group rg-taskflow \
-                  --name ${{ steps.aks.outputs.name }} \
-                  --command "
-                    helm upgrade --install ${{ inputs.service_name }} /tmp/$(basename $CHART_TGZ) \
-                      --namespace taskflow \
-                      --create-namespace \
-                      --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
-                      --set image.tag=${{ steps.tag.outputs.tag }} \
-                      --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
-                      --wait \
-                      --timeout 5m
-                  " \
-                  --file $CHART_TGZ
+            --resource-group rg-taskflow \
+            --name ${{ steps.aks.outputs.name }} \
+            --command "
+              helm upgrade --install ${{ inputs.service_name }} $(basename $CHART_TGZ) \
+                --namespace taskflow \
+                --create-namespace \
+                --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
+                --set image.tag=${{ steps.tag.outputs.tag }} \
+                --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
+                --wait \
+                --timeout 5m
+            " \
+            --file $CHART_TGZ
