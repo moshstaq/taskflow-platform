@@ -1,0 +1,22 @@
+{
+  "modules": [
+    {
+      "name": "foundation",
+      "path": "terraform/foundation",
+      "tier": 1,
+      "ci_enabled": true
+    },
+    {
+      "name": "compute",
+      "path": "terraform/compute",
+      "tier": 2,
+      "ci_enabled": true
+    },
+    {
+      "name": "bindings",
+      "path": "terraform/bindings",
+      "tier": 3,
+      "ci_enabled": true
+    }
+  ]
+}
