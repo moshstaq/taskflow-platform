@@ -1,7 +1,4 @@
 # ── Remote State: Platform Connectivity ──────────────────────────────────────
-# Reads networking outputs provisioned by platform/connectivity.
-# This module consumes: rg_taskflow_name
-# Platform must be applied before this module can be initialised.
 
 data "terraform_remote_state" "connectivity" {
   backend = "azurerm"
@@ -14,9 +11,7 @@ data "terraform_remote_state" "connectivity" {
 }
 
 # ── Remote State: Platform Management ────────────────────────────────────────
-# Reads observability outputs provisioned by platform/management.
-# This module consumes: log_analytics_workspace_id
-# Used to wire diagnostic settings for ACR, Service Bus, Key Vault.
+
 
 data "terraform_remote_state" "management" {
   backend = "azurerm"
@@ -64,8 +59,6 @@ resource "azurerm_container_registry" "acr" {
 
 
 # ── Service Bus ───────────────────────────────────────────────────────────────
-# Async messaging between processor-service and notification-service.
-# Topic/subscription model: processor publishes, notification-service consumes.
 
 resource "azurerm_servicebus_namespace" "sb" {
   name                = "sb-taskflow-${random_string.suffix.result}"
@@ -124,8 +117,7 @@ resource "azurerm_key_vault" "kv" {
 
 
 # ── Managed Identities ────────────────────────────────────────────────────────
-# One User Assigned Managed Identity per service that requires Azure resource
-# access (Key Vault, Service Bus).
+
 #
 resource "azurerm_user_assigned_identity" "mi_api_service" {
   name                = "mi-taskflow-api-service"
@@ -153,8 +145,7 @@ resource "azurerm_user_assigned_identity" "mi_notification_service" {
 
 
 #----- Diagnostic Settings ───────────────────────────────────────────────────────
-# Wires diagnostics from ACR, Service Bus, and Key Vault to the Log Analytics
-# workspace provisioned by platform/management. 
+
 resource "azurerm_monitor_diagnostic_setting" "acr" {
   name                       = "diag-acr-taskflow"
   target_resource_id         = azurerm_container_registry.acr.id
