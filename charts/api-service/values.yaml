@@ -1,19 +1,18 @@
 replicaCount: 2
 
 image:
-  repository: "" # populated by pipeline: <acr_login_server>/api-service
+  repository: "" 
   tag: "latest"
   pullPolicy: Always
 
-# Workload identity — populated from Terraform output mi_api_service_client_id
-# after foundation tier is first applied.
+
 workloadIdentity:
-  clientId: "" # TODO: set from terraform output -raw mi_api_service_client_id
+  clientId: "" 
 
 serviceAccount:
   name: api-service
 
-processorUrl: "http://processor-service:8080"
+processorUrl: "http://processor-service"
 
 service:
   type: ClusterIP

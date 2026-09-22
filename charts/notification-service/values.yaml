@@ -11,6 +11,11 @@ workloadIdentity:
 serviceAccount:
   name: notification-service
 
+serviceBus:
+  fqdn: "" # populated by pipeline at deploy time
+  topic: "task-events"
+  subscription: "notification-service"
+
 service:
   type: ClusterIP
   port: 80
@@ -34,3 +39,4 @@ nodeSelector:
 
 podDisruptionBudget:
   minAvailable: 1
+

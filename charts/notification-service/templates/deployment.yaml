@@ -28,6 +28,13 @@ spec:
               protocol: TCP
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: SERVICEBUS_FQDN
+              value: {{ required "serviceBus.fqdn must be set at deploy time"  .Values.serviceBus.fqdn | quote }}
+            - name: SERVICEBUS_TOPIC
+              value: {{ .Values.serviceBus.topic | quote }}
+            - name: SERVICEBUS_SUBSCRIPTION
+              value: {{ .Values.serviceBus.subscription | quote }}
           livenessProbe:
             httpGet:
               path: /health
