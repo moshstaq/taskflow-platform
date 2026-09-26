@@ -6,10 +6,18 @@ image:
   pullPolicy: Always
 
 workloadIdentity:
-  clientId: "" # TODO:from terraform output -raw mi_processor_service_client_id
+  clientId: "" 
 
 serviceAccount:
   name: processor-service
+
+serviceBus:
+  fqdn: "" # populated by pipeline at deploy time
+  topic: "task-events"
+
+keyVault:
+  uri: ""  # populated by pipeline at deploy time
+
 
 service:
   type: ClusterIP
@@ -34,4 +42,6 @@ nodeSelector:
 
 podDisruptionBudget:
   minAvailable: 1
+
+
 
