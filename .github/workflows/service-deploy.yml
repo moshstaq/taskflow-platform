@@ -118,6 +118,15 @@ jobs:
            --output tsv)
           echo "fqdn=${SB_NAME}.servicebus.windows.net" >> $GITHUB_OUTPUT
 
+      - name: Get Key Vault URI
+        id: keyvault
+        run: |
+          KV_URI=$(az keyvault list \
+            --resource-group rg-taskflow \
+            --query "[0].properties.vaultUri" \
+            --output tsv)
+          echo "uri=$KV_URI" >> $GITHUB_OUTPUT
+
       - name: Deploy via az aks command invoke
         run: |
           CHART_TGZ=$(helm package charts/${{ inputs.service_name }} \
@@ -135,7 +144,8 @@ jobs:
                 --set image.repository=${{ steps.acr.outputs.server }}/${{ inputs.service_name }} \
                 --set image.tag=${{ steps.tag.outputs.tag }} \
                 --set workloadIdentity.clientId=${{ steps.workload-identity.outputs.client_id }} \
-                --set serviceBus.fqdn=${{steps.serviceBus.outputs.fqdn}} \
+                --set serviceBus.fqdn=${{ steps.serviceBus.outputs.fqdn }} \
+                --set keyVault.uri=${{ steps.keyvault.outputs.uri }} \
                 --wait \
                 --timeout 5m
             " \

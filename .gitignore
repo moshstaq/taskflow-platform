@@ -14,7 +14,7 @@
 *secret*
 *password*
 *.env
-*.venv/
+
 
 # OS
 .DS_Store
@@ -38,3 +38,7 @@ Thumbs.db
 *.tfstate.*
 .terraform/
 *.bak
+
+__pycache__/
+*.pyc
+.venv/

@@ -15,6 +15,10 @@ serviceBus:
   fqdn: "" # populated by pipeline at deploy time
   topic: "task-events"
 
+keyVault:
+  uri: ""  # populated by pipeline at deploy time
+
+
 service:
   type: ClusterIP
   port: 80

@@ -33,6 +33,8 @@ spec:
               value: {{ required "serviceBus.fqdn must be set at deploy time" .Values.serviceBus.fqdn | quote }}
             - name: SERVICEBUS_TOPIC
               value: {{ .Values.serviceBus.topic | quote }}
+            - name: KEYVAULT_URI
+              value: {{ required "keyVault.uri must be set at deploy time" .Values.keyVault.uri | quote }}
           livenessProbe:
             httpGet:
               path: /health
