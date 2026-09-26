@@ -52,7 +52,7 @@ locals {
   mi_notification_service_id        = data.terraform_remote_state.foundation.outputs.mi_notification_service_id
   service_bus_namespace_id          = data.terraform_remote_state.foundation.outputs.service_bus_namespace_id
   key_vault_name                    = data.terraform_remote_state.foundation.outputs.key_vault_name
-  private_dns_zone_kv_rg            = data.terraform_remote_state.connectivity.outputs.private_dns_zone_kv_rg
+  private_dns_zone_kv_id            = data.terraform_remote_state.connectivity.outputs.private_dns_zone_kv_id
 
 
   common_tags = {
@@ -152,6 +152,11 @@ resource "azurerm_role_assignment" "sb_receiver_notification_service" {
 
 
 # ── Key Vault Private Endpoint ────────────────────────────────────────────────
+# Private NIC for Key Vault in snet-compute, so pod traffic to the vault stays
+# inside the VNet. The privatelink.vaultcore.azure.net zone is platform-owned
+# (azure-landing-zone) and shared by all workloads; this endpoint joins it via
+# a zone group, so Azure creates and maintains the A record and it follows the
+# endpoint's private IP.
 
 resource "azurerm_private_endpoint" "kv" {
   name                = "pe-kv-taskflow"
@@ -166,17 +171,11 @@ resource "azurerm_private_endpoint" "kv" {
     is_manual_connection           = false
   }
 
+  private_dns_zone_group {
+    name                 = "kv-dns"
+    private_dns_zone_ids = [local.private_dns_zone_kv_id]
+  }
+
   tags = local.common_tags
 }
-
-#
-resource "azurerm_private_dns_a_record" "kv" {
-  name                = local.key_vault_name
-  zone_name           = "privatelink.vaultcore.azure.net"
-  resource_group_name = local.private_dns_zone_kv_rg
-  ttl                 = 300
-  records             = [azurerm_private_endpoint.kv.private_service_connection[0].private_ip_address]
-}
-# -----------------------------------------------------------------------------
-
 
