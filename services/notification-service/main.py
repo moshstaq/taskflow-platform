@@ -18,24 +18,32 @@ SERVICEBUS_SUBSCRIPTION = os.environ["SERVICEBUS_SUBSCRIPTION"]
 seen_task_ids = set()
 
 async def consume(client: ServiceBusClient):
-    async with client.get_subcription_receiver(
-        topic_name=SERVICEBUS_TOPIC,
-        subcription_name=SERVICEBUS_SUBSCRIPTION,
-        max_wait_time=5,
-    ) as receiver:
-        logger.info("Listening on %s/%s", SERVICEBUS_TOPIC, SERVICEBUS_SUBSCRIPTION)
-        while True:
-            messages = await receiver.receive_messages(max_message_count=10, max_wait_time=5)
-            for message in messages:
-                task_id = message.message_id
-                if task_id in seen_task_ids:
-                    logger.warning("Duplicate delivery of %s, skipping work", task_id)
-                else:
-                    body = json.loads(str(message))
-                    logger.info("Notifying for task %s: %s", task_id, body)
-                    seen_task_ids.add(task_id)
-                await receiver.complete_message(message)
+    try:
+        async with client.get_subscription_receiver(
+            topic_name=SERVICEBUS_TOPIC,
+            subscription_name=SERVICEBUS_SUBSCRIPTION,
+            max_wait_time=5,
+        ) as receiver:
+            logger.info("Listening on %s/%s", SERVICEBUS_TOPIC, SERVICEBUS_SUBSCRIPTION)
+            while True:
+                messages = await receiver.receive_messages(max_message_count=10, max_wait_time=5)
+                for message in messages:
+                    task_id = message.message_id
+                    if task_id in seen_task_ids:
+                        logger.warning("Duplicate delivery of %s, skipping work", task_id)
+                    else:
+                        body = json.loads(str(message))
+                        logger.info("Notifying for task %s: %s", task_id, body)
+                        seen_task_ids.add(task_id)
+                    await receiver.complete_message(message)
+    except asyncio.CancelledError:
+        logger.info("Consumer cancelled")
+        raise
+    except Exception:
+        logger.exception("Consumer failed")
+        raise
 
+    
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     credential = DefaultAzureCredential()
