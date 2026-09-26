@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("azure").setLevel(logging.WARNING)
 logger = logging.getLogger("processor-service")
 
 SERVICEBUS_FQDN = os.environ["SERVICEBUS_FQDN"]
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     )
     sender = client.get_topic_sender(topic_name=SERVICEBUS_TOPIC)
 
+    # Azure SDK logs AMQP state transitions and HTTP headers at INFO, which buries service logs. Raise to WARNING here; lower temporarily when debugging the credential chain or connection setup.
 
     app.state.credential = credential
     app.state.client = client

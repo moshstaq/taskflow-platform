@@ -8,7 +8,10 @@ from azure.identity.aio import DefaultAzureCredential
 from azure.servicebus.aio import ServiceBusClient
 from fastapi import FastAPI
 
+ # Azure SDK logs AMQP state transitions and HTTP headers at INFO, which buries service logs. Raise to WARNING here; lower temporarily when debugging the credential chain or connection setup.
+
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("azure").setLevel(logging.WARNING)
 logger = logging.getLogger("notification-service")
 
 SERVICEBUS_FQDN = os.environ["SERVICEBUS_FQDN"]
